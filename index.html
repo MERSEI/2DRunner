@@ -1246,35 +1246,40 @@ const UISystem = {
   },
   
   drawBottomBar(ctx) {
-    const safeR = Game.safeR || 0, safeB = Game.safeB || 0;
-    const barY = CONFIG.H - CONFIG.BAR_H - safeB;
-    const extBarY = barY - 100;
-    // Extended background (100px taller, no stretch)
+    const s = Game.scale || 1;
+    const cW = ctx.canvas.width, cH = ctx.canvas.height;
+    const barH = CONFIG.BAR_H * s;
+    const extH = 100 * s;
+    const barY = cH - barH;
+    const extBarY = barY - extH;
+
     ctx.fillStyle = '#6d28b2';
-    ctx.fillRect(0, extBarY, CONFIG.W, CONFIG.BAR_H + 100);
-    
+    ctx.fillRect(0, extBarY, cW, barH + extH);
+
     const img = AssetManager.get('bottom-bar');
     if (img && img.naturalWidth) {
       const skip = Math.round(img.naturalHeight * 0.001);
       ctx.drawImage(img, 0, skip, img.naturalWidth, img.naturalHeight - skip,
-        0, extBarY, CONFIG.W, CONFIG.BAR_H + 100);
+        0, extBarY, cW, barH + extH);
     }
-    
-    const bW = 148, bH = 48, bX = CONFIG.W - bW - 14 - safeR, bY = barY + (CONFIG.BAR_H - bH) / 2;
+
+    const safeR = (Game.safeR || 0) * s;
+    const bW = 148 * s, bH = 48 * s;
+    const bX = cW - bW - 14 * s - safeR, bY = barY + (barH - bH) / 2;
     const pulse = 1 + 0.12 * Math.sin(Date.now() * 0.005);
     const cx = bX + bW / 2, cy = bY + bH / 2;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(pulse, pulse);
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowBlur = 14 * s;
+    ctx.shadowOffsetY = 5 * s;
     ctx.fillStyle = '#ff9800';
-    this.roundRect(ctx, -bW / 2, -bH / 2, bW, bH, 24);
+    this.roundRect(ctx, -bW / 2, -bH / 2, bW, bH, 24 * s);
     ctx.fill();
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px "Cooper Black","Lilita One",serif';
+    ctx.font = `bold ${Math.round(22 * s)}px "Cooper Black","Lilita One",serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('GET', 0, 0);
@@ -1953,8 +1958,7 @@ const Game = {
     if (this.shakeTimer > 0) ctx.restore();
 
     UISystem.drawHUD(ctx, this.lives, Math.round(this.displayScore));
-    UISystem.drawBottomBar(ctx);
-    
+
     if (this.state === 'MENU') {
       UISystem.drawMenu(ctx, this.handAnim);
     } else if (this.state === 'PLAYING' && this.tutorialActive) {
@@ -1964,11 +1968,9 @@ const Game = {
     } else if (this.state === 'GAMEOVER') {
       UISystem.drawGameOver(ctx, this.score, this.gameoverPhase, this.gameoverTs, this.phaseTs);
       FXSystem.draw(ctx);
-      UISystem.drawBottomBar(ctx);
     } else if (this.state === 'WIN') {
       UISystem.drawWin(ctx, this.score, this.winTs);
       FXSystem.draw(ctx);
-      UISystem.drawBottomBar(ctx);
     }
     
     if (this.showDebug) {
@@ -1984,6 +1986,8 @@ const Game = {
       ctx.fillText(`Press D to toggle debug`, 10, 60);
     }
     ctx.restore();
+    // ── Bottom bar: drawn in screen coords — fills full device width ──
+    UISystem.drawBottomBar(ctx);
     // ── Phone frame: drawn in screen coords after game content ──
     const _bx = Game.offsetX, _by = Game.offsetY;
     const _bw = CONFIG.W * Game.scale, _bh = CONFIG.H * Game.scale;
