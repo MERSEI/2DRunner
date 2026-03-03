@@ -85,7 +85,7 @@ const CONFIG = {
     
     // Анимация: только проверенные кадры (кадры 36/37 пустые в player_spaced.png)
     ANIMATIONS: {
-      run:   [1, 11, 14, 19, 25, 26, ],
+      run:   [1, 11, 14, 19, 25, 26],
       jump:  [1, 2, 6, 14],
       fall:  [3, 4, 5],
       idle:  [7, 8, 9, 10]
@@ -700,15 +700,7 @@ const Background = {
       // Start from t=-1 for extra coverage on the left edge at loop point
       for (let t = -1; t < tilesNeeded; t++) {
         const dx = t * imgW - scrollX;
-        if (t % 2 === 0) {
-          ctx.drawImage(bgImg, 0, 0, imgW, imgH, dx, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
-        } else {
-          ctx.save();
-          ctx.translate(dx + imgW, CONFIG.BG_OFFSET_Y);
-          ctx.scale(-1, 1);
-          ctx.drawImage(bgImg, 0, 0, imgW, imgH, 0, 0, imgW, CONSTANTS.BG_DRAW_H);
-          ctx.restore();
-        }
+        ctx.drawImage(bgImg, 0, 0, imgW, imgH, dx, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
       }
     }
 
@@ -1029,30 +1021,30 @@ const CoinSystem = {
   list: [],
 
   spawnGroup(speed) {
-    const count = 3 + Math.floor(Math.random() * 3); // 3-5 монет
     const isPaypal = Math.random() < 0.45;
     const type = isPaypal ? 'paypal' : 'coin';
-
-    const BASE_HEIGHTS = [
-      CONSTANTS.GROUND_Y - CONFIG.COIN.H - 30,
-      CONSTANTS.GROUND_Y - CONFIG.COIN.H - 180,
-      CONSTANTS.GROUND_Y - CONFIG.COIN.H - 330
-    ];
-    const centerY = BASE_HEIGHTS[Math.floor(Math.random() * BASE_HEIGHTS.length)];
-    const amplitude = 70 + Math.random() * 60;
+    const count = 5 + Math.floor(Math.random() * 2); // 5-6 монет — чистая арка
     const spacing = CONFIG.COIN.W + 28;
 
+    // Амплитуды откалиброваны под физику прыжка (JUMP_VY=17, GRAVITY=0.40 → апекс ≈361px):
+    //   160px → пик y≈410 (неполный прыжок)
+    //   280px → пик y≈290 (полный прыжок)
+    //   370px → пик y≈200 (апекс прыжка)
+    const amplitudes = [160, 280, 370];
+    const amplitude = amplitudes[Math.floor(Math.random() * amplitudes.length)];
+    const groundBase = CONSTANTS.GROUND_Y - CONFIG.COIN.H - 10; // монеты у земли на концах арки
+
     for (let i = 0; i < count; i++) {
-      const phase = (i / Math.max(count - 1, 1)) * Math.PI * 1.6;
-      const yWave = Math.sin(phase) * amplitude;
-      const baseY = Math.min(
-        Math.max(centerY + yWave, CONSTANTS.ROAD_TOP_Y - CONFIG.COIN.H + 10),
-        CONSTANTS.GROUND_Y - CONFIG.COIN.H - 10
+      const phase = (i / Math.max(count - 1, 1)) * Math.PI; // 0 → π: чистая арка вверх
+      const coinY = Math.min(
+        Math.max(groundBase - Math.sin(phase) * amplitude,
+                 CONSTANTS.ROAD_TOP_Y - CONFIG.COIN.H + 10),
+        groundBase
       );
       this.list.push({
         x: CONFIG.W + 40 + i * spacing,
-        y: baseY,
-        baseY,
+        y: coinY,
+        baseY: coinY,
         bobTimer: i * 0.6,
         speed: speed || CONFIG.BG_SPEED,
         dead: false,
@@ -1247,25 +1239,29 @@ const UISystem = {
   
   drawBottomBar(ctx) {
     const s = Game.scale || 1;
+    const ox = Game.offsetX || 0;
     const cW = ctx.canvas.width, cH = ctx.canvas.height;
+    const gameLeft = Math.max(0, ox);
+    const gameRight = Math.min(cW, ox + CONFIG.W * s);
+    const barW = gameRight - gameLeft;
     const barH = CONFIG.BAR_H * s;
     const extH = 100 * s;
     const barY = cH - barH;
     const extBarY = barY - extH;
 
     ctx.fillStyle = '#6d28b2';
-    ctx.fillRect(0, extBarY, cW, barH + extH);
+    ctx.fillRect(gameLeft, extBarY, barW, barH + extH);
 
     const img = AssetManager.get('bottom-bar');
     if (img && img.naturalWidth) {
       const skip = Math.round(img.naturalHeight * 0.001);
       ctx.drawImage(img, 0, skip, img.naturalWidth, img.naturalHeight - skip,
-        0, extBarY, cW, barH + extH);
+        gameLeft, extBarY, barW, barH + extH);
     }
 
     const safeR = (Game.safeR || 0) * s;
     const bW = 148 * s, bH = 48 * s;
-    const bX = cW - bW - 14 * s - safeR, bY = barY + (barH - bH) / 2;
+    const bX = gameRight - bW - 14 * s - safeR, bY = barY + (barH - bH) / 2;
     const pulse = 1 + 0.12 * Math.sin(Date.now() * 0.005);
     const cx = bX + bW / 2, cy = bY + bH / 2;
     ctx.save();
@@ -1788,9 +1784,10 @@ const Game = {
 
     if (!playing && !finishing) return;
 
-    // FINISHING: player runs toward the frozen finish post
+    // FINISHING: player runs right, finish line moves with world (stationary in world)
     if (finishing) {
       Player.x += CONFIG.BG_SPEED;
+      this.finishLine.x -= CONFIG.BG_SPEED;
       if (Player.x + CONFIG.PLAYER.W / 2 >= this.finishLine.x) {
         this.state = 'WIN';
         this.winTs = Date.now();
@@ -1891,9 +1888,9 @@ const Game = {
 
     this.enemiesPassed += EnemySystem.justPassedCount;
 
-    // После 3-го врага — финишная черта появляется на экране, игрок сам идёт к ней
+    // После 3-го врага — финиш спавнится за правым краем, игрок добегает до него
     if (this.state === 'PLAYING' && this.enemiesPassed >= 3 && !this.finishLine) {
-      this.finishLine = { x: Math.round(CONFIG.W * 0.75), active: true };
+      this.finishLine = { x: CONFIG.W + 300, active: true };
       this.state = 'FINISHING';
     }
   },
@@ -1904,7 +1901,7 @@ const Game = {
   
   render(ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = '#a8d8f0';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(Game.offsetX, Game.offsetY);
@@ -1988,28 +1985,6 @@ const Game = {
     ctx.restore();
     // ── Bottom bar: drawn in screen coords — fills full device width ──
     UISystem.drawBottomBar(ctx);
-    // ── Phone frame: drawn in screen coords after game content ──
-    const _bx = Game.offsetX, _by = Game.offsetY;
-    const _bw = CONFIG.W * Game.scale, _bh = CONFIG.H * Game.scale;
-    if (!Game.isMobile && (_bx > 4 || _by > 4)) {
-      const pad = 16;
-      const r = 32;
-      ctx.save();
-      // Outer dark bezel
-      ctx.strokeStyle = '#0d0d1a';
-      ctx.lineWidth = pad * 2;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.roundRect(_bx - pad, _by - pad, _bw + pad * 2, _bh + pad * 2, r);
-      ctx.stroke();
-      // Subtle inner highlight
-      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(_bx - pad + 1, _by - pad + 1, _bw + pad * 2 - 2, _bh + pad * 2 - 2, r);
-      ctx.stroke();
-      ctx.restore();
-    }
   },
   
   loop(ts) {
