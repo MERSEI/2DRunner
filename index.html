@@ -69,7 +69,7 @@ const CONFIG = {
     X: 90,
     W: 93,
     H: 120,
-    FPS: 13,
+    FPS: 12,
     
     // Новые параметры сетки
     SHEET_W: 1670,
@@ -86,7 +86,7 @@ const CONFIG = {
     // Анимация: только проверенные кадры (кадры 36/37 пустые в player_spaced.png)
     ANIMATIONS: {
       run:   [1, 11, 14, 19, 25, 26],
-      jump:  [1, 2, 6, 14],
+      jump:  [1, 14, 6, 2],
       fall:  [3, 4, 5],
       idle:  [7, 8, 9, 10]
     }
@@ -114,7 +114,7 @@ const CONFIG = {
   },
 
   GRAVITY: 0.40,
-  JUMP_VY: -17,
+  JUMP_VY: -18,
   BG_SPEED: 2,
   ENEMY_SPD: 2.5,
   ENEMY_ACCEL: 0.00004,
@@ -1037,11 +1037,11 @@ const CoinSystem = {
     const count = 5; // ровно 5 — чистая арка без наложений
     const spacing = CONFIG.COIN.W + 28;
 
-    // Амплитуды откалиброваны под физику прыжка (JUMP_VY=17, GRAVITY=0.40 → апекс ≈361px):
-    //   160px → пик y≈410 (неполный прыжок)
-    //   280px → пик y≈290 (полный прыжок)
-    //   370px → пик y≈200 (апекс прыжка)
-    const amplitudes = [160, 280, 370];
+    // Амплитуды откалиброваны под физику прыжка (JUMP_VY=24, GRAVITY=0.40 → апекс ≈720px):
+    //   170px → пик y≈400 (неполный прыжок, ~30% апекса)
+    //   320px → пик y≈250 (полный прыжок, ~65% апекса)
+    //   460px → пик y≈110 (у апекса, ~85%)
+    const amplitudes = [170, 320, 460];
     const amplitude = amplitudes[Math.floor(Math.random() * amplitudes.length)];
     const groundBase = CONSTANTS.GROUND_Y - CONFIG.COIN.H - 10; // монеты у земли на концах арки
 
@@ -1055,7 +1055,7 @@ const CoinSystem = {
     for (let i = 0; i < count; i++) {
       const phase = (i / Math.max(count - 1, 1)) * Math.PI; // 0 → π: чистая арка вверх
       const coinY = Math.min(
-        Math.max(groundBase - Math.sin(phase) * amplitude, 150),
+        Math.max(groundBase - Math.sin(phase) * amplitude, 80),
         groundBase
       );
       this.list.push({
@@ -1274,7 +1274,7 @@ const UISystem = {
     }
 
     const bW = 120 * s, bH = 48 * s;
-    const bX = gameRight - bW - 14 * s;
+    const bX = gameRight - bW - 40 * s;
     const bY = cH - bH - 14 * s;
     this.getBtn = { x: bX, y: bY, w: bW, h: bH };
     const pulse = 1 + 0.12 * Math.sin(Date.now() * 0.005);
@@ -1286,7 +1286,7 @@ const UISystem = {
     ctx.shadowBlur = 14 * s;
     ctx.shadowOffsetY = 5 * s;
     ctx.fillStyle = '#ff9800';
-    this.roundRect(ctx, -bW / 2, -bH / 2, bW, bH, 24 * s);
+    this.roundRect(ctx, -bW / 2, -bH / 2, bW, bH, 20 * s);
     ctx.fill();
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = '#fff';
@@ -1814,7 +1814,6 @@ const Game = {
       if (Player.x + CONFIG.PLAYER.W / 2 >= this.finishLine.x) {
         this.state = 'WIN';
         this.winTs = Date.now();
-        this.finishLine.active = false;
         FXSystem.spawnConfetti();
       }
       return;
@@ -2027,21 +2026,17 @@ function resize() {
   canvas.height = document.documentElement.clientHeight || window.innerHeight;
   Game.isMobile = window.matchMedia('(pointer: coarse)').matches;
   const isLandscape = canvas.width > canvas.height;
-  let s;
-  if (Game.isMobile && isLandscape) {
-    // Landscape touch (Nest Hub 1024×600, Nest Hub Max 1280×800, tablet landscape):
-    // scale by height so the portrait game fits without vertical clipping
-    s = canvas.height / CONFIG.H;
-  } else if (Game.isMobile) {
-    // Portrait touch (phone): fill screen, clip excess horizontally
-    s = Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
-  } else {
-    // Desktop (mouse/trackpad): letterbox
-    s = Math.min(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
-  }
+  // Touch: always fill all screen space (Math.max); Desktop: letterbox (Math.min)
+  const s = Game.isMobile
+    ? Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H)
+    : Math.min(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
   Game.scale = s;
   Game.offsetX = (canvas.width - CONFIG.W * s) / 2;
-  Game.offsetY = (canvas.height - CONFIG.H * s) / 2;
+  // Landscape touch: anchor GROUND_Y at 82% of screen so player stays visible.
+  // safeT recalculates correctly → drawHUD auto-shifts to visible area (~15–20px from top).
+  Game.offsetY = (Game.isMobile && isLandscape)
+    ? canvas.height * 0.82 - CONSTANTS.GROUND_Y * s
+    : (canvas.height - CONFIG.H * s) / 2;
   // Safe-area insets in game coords: how much of the game is off-screen on each side
   Game.safeL = Math.max(0, -Game.offsetX / s);
   Game.safeR = Math.max(0, (Game.offsetX + CONFIG.W * s - canvas.width) / s);
