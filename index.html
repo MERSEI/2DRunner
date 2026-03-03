@@ -106,8 +106,8 @@ const CONFIG = {
   
   COIN: {
     W: 100, H: 100,
-    VALUE: 5,
-    PAYPAL_VALUE: 20,
+    VALUE: 20,
+    PAYPAL_VALUE: 50,
     SPAWN_MIN: 1400,
     SPAWN_MAX: 2800,
     PAYPAL_W: 100, PAYPAL_H: 80,
@@ -695,22 +695,23 @@ const Background = {
       const imgH = bgImg.naturalHeight;
       // Math.round eliminates uneven 2px jumps from Math.floor rounding drift
       const bgOffset = Math.round(this.offset * 0.35);
+      const tileOffset = Math.floor(bgOffset / imgW); // absolute tile counter for stable mirroring
       const scrollX = bgOffset % imgW;
       const tilesNeeded = Math.ceil(CONFIG.W / imgW) + 1;
-      // Start from t=-1 for extra coverage on the left edge at loop point
+      // Alternate tiles are mirrored so seam edges are symmetric (same pixel on both sides)
+      // absoluteTile index ensures mirror state is stable during scroll (no flip teleport)
       for (let t = -1; t < tilesNeeded; t++) {
         const dx = Math.floor(t * imgW - scrollX);
-        ctx.drawImage(bgImg, 0, 0, imgW, imgH, dx, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
-      }
-      // Gradient overlay on each seam to hide color difference between tile edges
-      for (let t = 0; t < tilesNeeded + 1; t++) {
-        const seamX = Math.floor(t * imgW - scrollX);
-        const grad = ctx.createLinearGradient(seamX - 2, 0, seamX + 2, 0);
-        grad.addColorStop(0,   'rgba(0,0,0,0)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0.18)');
-        grad.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(seamX - 2, CONFIG.BG_OFFSET_Y, 4, CONSTANTS.BG_DRAW_H);
+        const mirror = ((tileOffset + t) & 1) !== 0;
+        if (mirror) {
+          ctx.save();
+          ctx.translate(dx + imgW, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(bgImg, 0, 0, imgW, imgH, 0, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
+          ctx.restore();
+        } else {
+          ctx.drawImage(bgImg, 0, 0, imgW, imgH, dx, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
+        }
       }
     }
 
@@ -1033,7 +1034,7 @@ const CoinSystem = {
   spawnGroup(speed) {
     const isPaypal = Math.random() < 0.45;
     const type = isPaypal ? 'paypal' : 'coin';
-    const count = 5 + Math.floor(Math.random() * 2); // 5-6 монет — чистая арка
+    const count = 5; // ровно 5 — чистая арка без наложений
     const spacing = CONFIG.COIN.W + 28;
 
     // Амплитуды откалиброваны под физику прыжка (JUMP_VY=17, GRAVITY=0.40 → апекс ≈361px):
@@ -1044,6 +1045,13 @@ const CoinSystem = {
     const amplitude = amplitudes[Math.floor(Math.random() * amplitudes.length)];
     const groundBase = CONSTANTS.GROUND_Y - CONFIG.COIN.H - 10; // монеты у земли на концах арки
 
+    // Start new group after the rightmost existing coin to prevent group overlap
+    let startX = CONFIG.W + 40;
+    if (this.list.length > 0) {
+      const rightmost = Math.max(...this.list.map(c => c.x));
+      startX = Math.max(startX, rightmost + spacing);
+    }
+
     for (let i = 0; i < count; i++) {
       const phase = (i / Math.max(count - 1, 1)) * Math.PI; // 0 → π: чистая арка вверх
       const coinY = Math.min(
@@ -1051,7 +1059,7 @@ const CoinSystem = {
         groundBase
       );
       this.list.push({
-        x: CONFIG.W + 40 + i * spacing,
+        x: startX + i * spacing,
         y: coinY,
         baseY: coinY,
         bobTimer: i * 0.6,
@@ -1225,7 +1233,7 @@ const UISystem = {
 
   drawHUD(ctx, lives, score) {
     const safeL = Game.safeL || 0, safeR = Game.safeR || 0, safeT = Game.safeT || 0;
-    const cW = 152, cH = 100, cX = CONFIG.W - cW - 10 - safeR, cY = 10 + safeT;
+    const cW = 170, cH = 100, cX = CONFIG.W - cW - 10 - safeR, cY = 10 + safeT;
 
     const cardImg = AssetManager.get('paypal-card');
     if (cardImg) ctx.drawImage(cardImg, cX, cY, cW, cH);
@@ -1254,7 +1262,7 @@ const UISystem = {
     const gameRight = Math.min(cW, ox + CONFIG.W * s);
     const barW = gameRight - gameLeft;
     const barH = CONFIG.BAR_H * s;
-    const extH = 100 * s;
+    const extH = 62 * s; // was 100; 88+62=150 ≈ 80% of original 188
     const barY = cH - barH;
     const extBarY = barY - extH;
 
@@ -1265,9 +1273,10 @@ const UISystem = {
         gameLeft, extBarY, barW, barH + extH);
     }
 
-    const safeR = (Game.safeR || 0) * s;
     const bW = 148 * s, bH = 48 * s;
-    const bX = gameRight - bW - 14 * s - safeR, bY = barY + (barH - bH) / 2;
+    const bX = gameRight - bW - 14 * s;
+    const bY = cH - bH - 14 * s;
+    this.getBtn = { x: bX, y: bY, w: bW, h: bH };
     const pulse = 1 + 0.12 * Math.sin(Date.now() * 0.005);
     const cx = bX + bW / 2, cy = bY + bH / 2;
     ctx.save();
@@ -1702,8 +1711,16 @@ const Game = {
     canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left - Game.offsetX) / Game.scale;
-      const y = (e.clientY - rect.top - Game.offsetY) / Game.scale;
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      // GET button is drawn in screen coords — check before game-coord conversion
+      const btn = UISystem.getBtn;
+      if (btn && sx >= btn.x && sx <= btn.x + btn.w && sy >= btn.y && sy <= btn.y + btn.h) {
+        window.open('https://example.com', '_blank');
+        return;
+      }
+      const x = (sx - Game.offsetX) / Game.scale;
+      const y = (sy - Game.offsetY) / Game.scale;
       this.handleInput(x, y);
     });
     
@@ -2006,8 +2023,8 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width  = document.documentElement.clientWidth  || window.innerWidth;
+  canvas.height = document.documentElement.clientHeight || window.innerHeight;
   Game.isMobile = window.matchMedia('(pointer: coarse)').matches;
   const s = Game.isMobile
     ? Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H)
