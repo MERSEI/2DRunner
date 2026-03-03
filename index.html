@@ -106,8 +106,8 @@ const CONFIG = {
   
   COIN: {
     W: 100, H: 100,
-    VALUE: 20,
-    PAYPAL_VALUE: 50,
+    VALUE: 10,
+    PAYPAL_VALUE: 25,
     SPAWN_MIN: 1400,
     SPAWN_MAX: 2800,
     PAYPAL_W: 100, PAYPAL_H: 80,
@@ -1273,7 +1273,7 @@ const UISystem = {
         gameLeft, extBarY, barW, barH + extH);
     }
 
-    const bW = 148 * s, bH = 48 * s;
+    const bW = 120 * s, bH = 48 * s;
     const bX = gameRight - bW - 14 * s;
     const bY = cH - bH - 14 * s;
     this.getBtn = { x: bX, y: bY, w: bW, h: bH };
@@ -1310,7 +1310,7 @@ const UISystem = {
     ctx.strokeText('earning!', CONFIG.W / 2, 400);
     ctx.shadowBlur = 0;
     
-    const hy = CONSTANTS.GROUND_Y + 20 + Math.sin(handAnim) * 13;
+    const hy = CONSTANTS.GROUND_Y - 40 + Math.sin(handAnim) * 13;
     const handImg = AssetManager.get('hand');
     if (handImg && handImg.naturalWidth) {
       ctx.drawImage(handImg, CONFIG.W / 2 - 42, hy, 84, 84);
@@ -2026,9 +2026,19 @@ function resize() {
   canvas.width  = document.documentElement.clientWidth  || window.innerWidth;
   canvas.height = document.documentElement.clientHeight || window.innerHeight;
   Game.isMobile = window.matchMedia('(pointer: coarse)').matches;
-  const s = Game.isMobile
-    ? Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H)
-    : Math.min(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
+  const isLandscape = canvas.width > canvas.height;
+  let s;
+  if (Game.isMobile && isLandscape) {
+    // Landscape touch (Nest Hub 1024×600, Nest Hub Max 1280×800, tablet landscape):
+    // scale by height so the portrait game fits without vertical clipping
+    s = canvas.height / CONFIG.H;
+  } else if (Game.isMobile) {
+    // Portrait touch (phone): fill screen, clip excess horizontally
+    s = Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
+  } else {
+    // Desktop (mouse/trackpad): letterbox
+    s = Math.min(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
+  }
   Game.scale = s;
   Game.offsetX = (canvas.width - CONFIG.W * s) / 2;
   Game.offsetY = (canvas.height - CONFIG.H * s) / 2;
