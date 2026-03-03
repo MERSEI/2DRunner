@@ -610,7 +610,7 @@ const Background = {
     { k: 'dec1',  w: 50,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
     { k: 'dec2',  w: 45,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
     { k: 'dec3',  w: 60,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
-    { k: 'lamp',  w: 100,  h: CONSTANTS.ROAD_TOP_Y + 40, yBase: -50, parallax: 0.35 }
+    { k: 'lamp',  w: 60,  h: CONSTANTS.ROAD_TOP_Y + 40, yBase: -20, parallax: 0.35 }
   ],
   
   items: [],
@@ -1274,8 +1274,8 @@ const UISystem = {
     }
 
     const bW = 120 * s, bH = 48 * s;
-    const bX = gameRight - bW - 30 * s;
-    const bY = cH - bH - 30 * s;
+    const bX = gameRight - bW - 40 * s;
+    const bY = cH - bH - 14 * s;
     this.getBtn = { x: bX, y: bY, w: bW, h: bH };
     const pulse = 1 + 0.12 * Math.sin(Date.now() * 0.005);
     const cx = bX + bW / 2, cy = bY + bH / 2;
@@ -2026,14 +2026,15 @@ function resize() {
   canvas.height = document.documentElement.clientHeight || window.innerHeight;
   Game.isMobile = window.matchMedia('(pointer: coarse)').matches;
   const isLandscape = canvas.width > canvas.height;
-  // Always fill 100% of screen on every device (Math.max — crop excess, never letterbox)
-  const s = Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
+  // Touch: always fill all screen space (Math.max); Desktop: letterbox (Math.min)
+  const s = Game.isMobile
+    ? Math.max(canvas.width / CONFIG.W, canvas.height / CONFIG.H)
+    : Math.min(canvas.width / CONFIG.W, canvas.height / CONFIG.H);
   Game.scale = s;
   Game.offsetX = (canvas.width - CONFIG.W * s) / 2;
-  // Landscape: anchor GROUND_Y at 82% screen height → player always visible.
-  // safeT shifts drawHUD into the visible strip (~15–35px from top).
-  // Portrait: standard center-Y (game taller than screen, crops top/bottom symmetrically).
-  Game.offsetY = isLandscape
+  // Landscape touch: anchor GROUND_Y at 82% of screen so player stays visible.
+  // safeT recalculates correctly → drawHUD auto-shifts to visible area (~15–20px from top).
+  Game.offsetY = (Game.isMobile && isLandscape)
     ? canvas.height * 0.82 - CONSTANTS.GROUND_Y * s
     : (canvas.height - CONFIG.H * s) / 2;
   // Safe-area insets in game coords: how much of the game is off-screen on each side
