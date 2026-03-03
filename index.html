@@ -114,7 +114,7 @@ const CONFIG = {
   },
 
   GRAVITY: 0.40,
-  JUMP_VY: -18,
+  JUMP_VY: -17,
   BG_SPEED: 2,
   ENEMY_SPD: 2.5,
   ENEMY_ACCEL: 0.00004,
@@ -1037,11 +1037,11 @@ const CoinSystem = {
     const count = 5; // ровно 5 — чистая арка без наложений
     const spacing = CONFIG.COIN.W + 28;
 
-    // Амплитуды откалиброваны под физику прыжка (JUMP_VY=24, GRAVITY=0.40 → апекс ≈720px):
-    //   170px → пик y≈400 (неполный прыжок, ~30% апекса)
-    //   320px → пик y≈250 (полный прыжок, ~65% апекса)
-    //   460px → пик y≈110 (у апекса, ~85%)
-    const amplitudes = [170, 320, 460];
+    // Амплитуды откалиброваны под физику прыжка (JUMP_VY=17, GRAVITY=0.40 → апекс ≈361px):
+    //   160px → пик y≈410 (неполный прыжок)
+    //   280px → пик y≈290 (полный прыжок)
+    //   370px → пик y≈200 (апекс прыжка)
+    const amplitudes = [160, 280, 370];
     const amplitude = amplitudes[Math.floor(Math.random() * amplitudes.length)];
     const groundBase = CONSTANTS.GROUND_Y - CONFIG.COIN.H - 10; // монеты у земли на концах арки
 
@@ -1055,7 +1055,7 @@ const CoinSystem = {
     for (let i = 0; i < count; i++) {
       const phase = (i / Math.max(count - 1, 1)) * Math.PI; // 0 → π: чистая арка вверх
       const coinY = Math.min(
-        Math.max(groundBase - Math.sin(phase) * amplitude, 80),
+        Math.max(groundBase - Math.sin(phase) * amplitude, 150),
         groundBase
       );
       this.list.push({
