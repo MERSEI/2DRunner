@@ -605,12 +605,12 @@ const AssetManager = {
 
 const Background = {
   DECO_CONFIG: [
-    { k: 'tree1', w: 800, h: CONSTANTS.ROAD_TOP_Y + 50, yBase: -120, parallax: 0.80 },
-    { k: 'tree2', w: 700, h: CONSTANTS.ROAD_TOP_Y + 50, yBase: -120, parallax: 0.80 },
-    { k: 'dec1',  w: 50,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.80 },
-    { k: 'dec2',  w: 45,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.80 },
-    { k: 'dec3',  w: 60,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.80 },
-    { k: 'lamp',  w: 60,  h: CONSTANTS.ROAD_TOP_Y + 40, yBase: -20, parallax: 1.0  }
+    { k: 'tree1', w: 800, h: CONSTANTS.ROAD_TOP_Y + 50, yBase: -120, parallax: 0.35 },
+    { k: 'tree2', w: 700, h: CONSTANTS.ROAD_TOP_Y + 50, yBase: -120, parallax: 0.35 },
+    { k: 'dec1',  w: 50,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
+    { k: 'dec2',  w: 45,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
+    { k: 'dec3',  w: 60,  h: 40, yBase: CONSTANTS.ROAD_TOP_Y - 110, parallax: 0.35 },
+    { k: 'lamp',  w: 60,  h: CONSTANTS.ROAD_TOP_Y + 40, yBase: -20, parallax: 0.35 }
   ],
   
   items: [],
@@ -699,8 +699,18 @@ const Background = {
       const tilesNeeded = Math.ceil(CONFIG.W / imgW) + 1;
       // Start from t=-1 for extra coverage on the left edge at loop point
       for (let t = -1; t < tilesNeeded; t++) {
-        const dx = t * imgW - scrollX;
+        const dx = Math.floor(t * imgW - scrollX);
         ctx.drawImage(bgImg, 0, 0, imgW, imgH, dx, CONFIG.BG_OFFSET_Y, imgW, CONSTANTS.BG_DRAW_H);
+      }
+      // Gradient overlay on each seam to hide color difference between tile edges
+      for (let t = 0; t < tilesNeeded + 1; t++) {
+        const seamX = Math.floor(t * imgW - scrollX);
+        const grad = ctx.createLinearGradient(seamX - 2, 0, seamX + 2, 0);
+        grad.addColorStop(0,   'rgba(0,0,0,0)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.18)');
+        grad.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(seamX - 2, CONFIG.BG_OFFSET_Y, 4, CONSTANTS.BG_DRAW_H);
       }
     }
 
@@ -1037,8 +1047,7 @@ const CoinSystem = {
     for (let i = 0; i < count; i++) {
       const phase = (i / Math.max(count - 1, 1)) * Math.PI; // 0 → π: чистая арка вверх
       const coinY = Math.min(
-        Math.max(groundBase - Math.sin(phase) * amplitude,
-                 CONSTANTS.ROAD_TOP_Y - CONFIG.COIN.H + 10),
+        Math.max(groundBase - Math.sin(phase) * amplitude, 150),
         groundBase
       );
       this.list.push({
@@ -1248,9 +1257,6 @@ const UISystem = {
     const extH = 100 * s;
     const barY = cH - barH;
     const extBarY = barY - extH;
-
-    ctx.fillStyle = '#6d28b2';
-    ctx.fillRect(gameLeft, extBarY, barW, barH + extH);
 
     const img = AssetManager.get('bottom-bar');
     if (img && img.naturalWidth) {
